@@ -20,6 +20,17 @@ sys.path.insert(0, os.path.dirname(__file__))
 from sentiment_model import TextPreprocessor, SentimentClassifier, generate_sample_data
 from sklearn.model_selection import train_test_split
 
+TEXT_COLUMN_CANDIDATES = ("text", "tweet", "content", "full_text")
+
+
+def resolve_text_column(columns):
+    """Return the best text column for tweet CSV exports."""
+    normalized = {column.lower().strip(): column for column in columns}
+    for candidate in TEXT_COLUMN_CANDIDATES:
+        if candidate in normalized:
+            return normalized[candidate]
+    return None
+
 
 def load_or_train_model():
     """Load saved model or train a fresh one if not found."""
@@ -84,20 +95,22 @@ def interactive_mode(model):
 
 
 def file_mode(model, file_path: str):
-    """Analyze all tweets in a CSV file (column: 'text')."""
+    """Analyze all tweets in a CSV file with a common tweet text column."""
     import pandas as pd
     print(f"\n📂 Reading tweets from: {file_path}")
     df = pd.read_csv(file_path)
-    if "text" not in df.columns:
-        print("❌ CSV must have a 'text' column.")
+    text_column = resolve_text_column(df.columns)
+    if text_column is None:
+        candidates = ", ".join(TEXT_COLUMN_CANDIDATES)
+        print(f"❌ CSV must have one of these text columns: {candidates}.")
         return
-    results = model.predict(df["text"].tolist())
+    results = model.predict(df[text_column].tolist())
     df["predicted_sentiment"] = [r["sentiment"] for r in results]
     df["confidence"] = [r["confidence"] for r in results]
     out = file_path.replace(".csv", "_predictions.csv")
     df.to_csv(out, index=False)
     print(f"✅ Predictions saved → {out}")
-    print(df[["text", "predicted_sentiment", "confidence"]].head(10).to_string(index=False))
+    print(df[[text_column, "predicted_sentiment", "confidence"]].head(10).to_string(index=False))
 
 
 def main():
